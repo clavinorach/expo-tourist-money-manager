@@ -28,7 +28,8 @@ Aplikasi **Tourist Money Manager** membantu wisatawan dalam mengelola keuangan s
    - Buat file `.env` di root proyek.
    - Tambahkan API key Gemini Anda:
      ```env
-     EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
+     EXPO_PUBLIC_EXCHANGE_RATE_API_KEY=
+     EXPO_PUBLIC_GEMINI_API_KEY=
      ```
 
 4. **Jalankan aplikasi**
