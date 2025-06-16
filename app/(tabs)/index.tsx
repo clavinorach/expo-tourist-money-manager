@@ -1,35 +1,143 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, PanResponder, Animated } from 'react-native';
 import { Link, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getFinancialSummary, getRecentTransactions, Transaction, FinancialSummary } from '../../database';
+import { getFinancialSummary, getRecentTransactions, Transaction, FinancialSummary, deleteTransaction } from '../../database';
 import dayjs from 'dayjs';
 
 export default function DashboardScreen() {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const swipeableRefs = useRef<{ [key: number]: Animated.Value }>({});
+
+  const loadData = async () => {
+    try {
+      const summaryData = await getFinancialSummary();
+      const recentTxs = await getRecentTransactions(10);
+      setSummary(summaryData);
+      setTransactions(recentTxs);
+      // Initialize swipeable refs for each transaction
+      recentTxs.forEach(tx => {
+        if (!swipeableRefs.current[tx.id]) {
+          swipeableRefs.current[tx.id] = new Animated.Value(0);
+        }
+      });
+    } catch (e) {
+      Alert.alert("Error", "Could not load dashboard data.");
+    }
+  };
 
   useFocusEffect(
     React.useCallback(() => {
-      const loadData = async () => {
-        try {
-          const summaryData = await getFinancialSummary();
-          const recentTxs = await getRecentTransactions(10);
-          setSummary(summaryData);
-          setTransactions(recentTxs);
-        } catch (e) {
-            Alert.alert("Error", "Could not load dashboard data.");
-        }
-      };
       loadData();
     }, [])
   );
+
+  const handleDeleteTransaction = async (id: number) => {
+    Alert.alert(
+      "Delete Transaction",
+      "Are you sure you want to delete this transaction?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => {
+            // Reset swipe position
+            Animated.spring(swipeableRefs.current[id], {
+              toValue: 0,
+              useNativeDriver: true,
+            }).start();
+          }
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteTransaction(id);
+              await loadData(); // Reload data after deletion
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete transaction");
+            }
+          }
+        }
+      ]
+    );
+  };
   
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: currency || 'IDR' }).format(amount);
+  const formatCurrency = (amount: number, currency: string | undefined) => {
+    return new Intl.NumberFormat('id-ID', { 
+      style: 'currency', 
+      currency: currency || 'IDR' 
+    }).format(amount);
   }
 
   const remainingBudget = (summary?.budget || 0) - (summary?.totalSpent || 0);
+
+  const createPanResponder = (id: number) => {
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx < 0) { // Only allow left swipe
+          swipeableRefs.current[id].setValue(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -100) { // Threshold for delete action
+          handleDeleteTransaction(id);
+        } else {
+          // Reset position
+          Animated.spring(swipeableRefs.current[id], {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    });
+  };
+
+  const renderTransactionItem = ({ item }: { item: Transaction }) => {
+    const panResponder = createPanResponder(item.id);
+    const translateX = swipeableRefs.current[item.id].interpolate({
+      inputRange: [-100, 0],
+      outputRange: [-100, 0],
+      extrapolate: 'clamp',
+    });
+
+    // Create animated value for delete button opacity
+    const deleteButtonOpacity = swipeableRefs.current[item.id].interpolate({
+      inputRange: [-100, -50, 0],
+      outputRange: [1, 0.5, 0],
+      extrapolate: 'clamp',
+    });
+
+    return (
+      <View style={styles.txItemContainer}>
+        <Animated.View
+          style={[
+            styles.txItem,
+            { transform: [{ translateX }] }
+          ]}
+          {...panResponder.panHandlers}
+        >
+          <Link href={{ pathname: "/add-edit-transaction", params: { transactionId: item.id } }} asChild>
+            <TouchableOpacity style={styles.txItemContent}>
+              <View>
+                <Text style={styles.txDescription}>{item.description}</Text>
+                <Text style={styles.txCategory}>{item.category} - {dayjs(item.timestamp).format('MMM D, HH:mm')}</Text>
+              </View>
+              <Text style={styles.txAmount}>-{formatCurrency(item.amount, item.currency)}</Text>
+            </TouchableOpacity>
+          </Link>
+        </Animated.View>
+        <Animated.View style={[styles.deleteButton, { opacity: deleteButtonOpacity }]}>
+          <Ionicons name="trash-outline" size={24} color="white" />
+        </Animated.View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -67,17 +175,7 @@ export default function DashboardScreen() {
           data={transactions}
           keyExtractor={item => item.id.toString()}
           scrollEnabled={false}
-          renderItem={({ item }) => (
-            <Link href={{ pathname: "/add-edit-transaction", params: { transactionId: item.id } }} asChild>
-                <TouchableOpacity style={styles.txItem}>
-                    <View>
-                        <Text style={styles.txDescription}>{item.description}</Text>
-                        <Text style={styles.txCategory}>{item.category} - {dayjs(item.timestamp).format('MMM D, HH:mm')}</Text>
-                    </View>
-                    <Text style={styles.txAmount}>-{formatCurrency(item.amount, item.currency)}</Text>
-                </TouchableOpacity>
-            </Link>
-          )}
+          renderItem={renderTransactionItem}
           ListEmptyComponent={<Text style={{textAlign: 'center', marginTop: 20}}>No transactions yet.</Text>}
         />
       </ScrollView>
@@ -96,8 +194,33 @@ const styles = StyleSheet.create({
     cardTitle: { fontSize: 14, color: '#95a5a6' },
     cardValue: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50', marginTop: 5 },
     sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#34495e', marginTop: 20, marginBottom: 10 },
-    txItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 15, borderRadius: 8, marginBottom: 10 },
+    txItemContainer: {
+      position: 'relative',
+      marginBottom: 10,
+    },
+    txItem: {
+      backgroundColor: 'white',
+      borderRadius: 8,
+      overflow: 'hidden',
+    },
+    txItemContent: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 15,
+    },
     txDescription: { fontSize: 16, fontWeight: '500' },
     txCategory: { fontSize: 12, color: '#7f8c8d' },
     txAmount: { fontSize: 16, fontWeight: 'bold', color: '#e74c3c' },
+    deleteButton: {
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: 80,
+      backgroundColor: '#e74c3c',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 8,
+    },
 });

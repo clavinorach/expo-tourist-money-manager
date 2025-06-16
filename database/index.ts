@@ -79,11 +79,59 @@ export const getUserSettings = (): UserSettings | null => {
    return db.getFirstSync<UserSettings>('SELECT home_currency, travel_budget FROM UserSettings WHERE id = 1;');
 }
 
-export const updateUserSettings = (settings: UserSettings) => {
-     db.runSync(
+export const updateUserSettings = async (settings: UserSettings) => {
+    const oldSettings = await getUserSettings();
+    
+    // If home currency changed, we need to update all transactions
+    if (oldSettings && oldSettings.home_currency !== settings.home_currency) {
+        await updateAllTransactionsForNewHomeCurrency(oldSettings.home_currency, settings.home_currency);
+    }
+
+    db.runSync(
         'UPDATE UserSettings SET home_currency = ?, travel_budget = ? WHERE id = 1;',
         [settings.home_currency, settings.travel_budget]
     );
+}
+
+const updateAllTransactionsForNewHomeCurrency = async (oldHomeCurrency: string, newHomeCurrency: string) => {
+    try {
+        // Get all transactions
+        const transactions = db.getAllSync<Transaction>('SELECT * FROM Transactions;');
+        
+        // Get new exchange rates
+        const rates = await fetchExchangeRate(newHomeCurrency);
+        
+        // Update each transaction
+        db.runSync('BEGIN TRANSACTION');
+        
+        for (const tx of transactions) {
+            let newAmountHomeCurrency: number;
+            
+            if (tx.currency === newHomeCurrency) {
+                // If transaction is in new home currency, use amount directly
+                newAmountHomeCurrency = tx.amount;
+            } else if (tx.currency === oldHomeCurrency) {
+                // If transaction was in old home currency, convert using new rates
+                const rate = rates[tx.currency];
+                newAmountHomeCurrency = tx.amount / rate;
+            } else {
+                // For other currencies, convert using new rates
+                const rate = rates[tx.currency];
+                newAmountHomeCurrency = tx.amount / rate;
+            }
+            
+            db.runSync(
+                'UPDATE Transactions SET amount_home_currency = ? WHERE id = ?;',
+                [newAmountHomeCurrency, tx.id]
+            );
+        }
+        
+        db.runSync('COMMIT');
+    } catch (error) {
+        db.runSync('ROLLBACK');
+        console.error('Error updating transactions for new home currency:', error);
+        throw error;
+    }
 }
 
 export const getExchangeRate = (currencyCode: string): { rate: number } | null => {
