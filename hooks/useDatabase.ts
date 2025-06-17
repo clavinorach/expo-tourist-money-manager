@@ -6,16 +6,28 @@ export const useDatabase = () => {
   const [dbError, setDbError] = useState<Error | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const setupDatabase = async () => {
       try {
         await initDatabase();
+        if (isMounted) {
+          setIsDbLoading(false);
+        }
       } catch (e) {
-        setDbError(e as Error);
-      } finally {
-        setIsDbLoading(false);
+        console.error('Database initialization error:', e);
+        if (isMounted) {
+          setDbError(e as Error);
+          setIsDbLoading(false);
+        }
       }
     };
+
     setupDatabase();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return { isDbLoading, dbError };

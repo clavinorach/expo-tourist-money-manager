@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { askGemini, ChatMessage } from '../../services/geminiApi';
 import { getFinancialSummary, getUserSettings } from '../../database';
@@ -20,7 +20,7 @@ export default function AssistantScreen() {
         const summary = await getFinancialSummary();
         const remainingBudget = (settings.travel_budget || 0) - (summary.totalSpent || 0);
 
-        return `🤖 **Tour-Fin AI Assistant** - Travel Finance Expert
+        return `🤖 **SakuTravel AI Assistant** - Travel Finance Expert
 Anda adalah asisten perjalanan yang ahli dalam:
 • Manajemen Keuangan Perjalanan
 • Rekomendasi Destinasi Wisata Indonesia
@@ -94,21 +94,26 @@ Selalu responsif, helpful, dan personal dalam setiap jawaban!`;
         )}
         ListEmptyComponent={<View style={styles.emptyChat}><Text>Ask me anything about your trip!</Text></View>}
       />
-      
+ 
       {isLoading && <ActivityIndicator size="small" color="#3498db" style={{marginVertical: 5}} />}
-
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={prompt}
-          onChangeText={setPrompt}
-          placeholder="Type your message..."
-          onSubmitEditing={handleSend}
-        />
-        <TouchableOpacity onPress={handleSend} style={styles.sendButton} disabled={isLoading}>
-          <Ionicons name="send" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
+      
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} // Adjust this offset as needed
+      >
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={prompt}
+            onChangeText={setPrompt}
+            placeholder="Type your message..."
+            onSubmitEditing={handleSend}
+          />
+          <TouchableOpacity onPress={handleSend} style={styles.sendButton} disabled={isLoading}>
+            <Ionicons name="send" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

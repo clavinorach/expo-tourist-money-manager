@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "tourist-money-manager",
-    "slug": "tourist-money-manager",
+    "name": "SakuTravel",
+    "slug": "SakuTravel",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -17,6 +17,7 @@
       "supportsTablet": true
     },
     "android": {
+      "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"

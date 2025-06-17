@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, PanResponder, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, PanResponder, Animated, ActivityIndicator } from 'react-native';
 import { Link, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getFinancialSummary, getRecentTransactions, Transaction, FinancialSummary, deleteTransaction } from '../../database';
@@ -8,10 +8,14 @@ import dayjs from 'dayjs';
 export default function DashboardScreen() {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const swipeableRefs = useRef<{ [key: number]: Animated.Value }>({});
 
   const loadData = async () => {
     try {
+      setIsLoading(true);
+      setError(null);
       const summaryData = await getFinancialSummary();
       const recentTxs = await getRecentTransactions(10);
       setSummary(summaryData);
@@ -23,7 +27,10 @@ export default function DashboardScreen() {
         }
       });
     } catch (e) {
-      Alert.alert("Error", "Could not load dashboard data.");
+      console.error('Error loading dashboard data:', e);
+      setError(e instanceof Error ? e.message : 'Could not load dashboard data');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -54,10 +61,14 @@ export default function DashboardScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              setIsLoading(true);
               await deleteTransaction(id);
               await loadData(); // Reload data after deletion
             } catch (error) {
+              console.error('Error deleting transaction:', error);
               Alert.alert("Error", "Failed to delete transaction");
+            } finally {
+              setIsLoading(false);
             }
           }
         }
@@ -139,6 +150,37 @@ export default function DashboardScreen() {
     );
   };
 
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Dashboard</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3498db" />
+          <Text style={styles.loadingText}>Loading dashboard data...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Dashboard</Text>
+        </View>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color="#e74c3c" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadData}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -209,18 +251,63 @@ const styles = StyleSheet.create({
       alignItems: 'center',
       padding: 15,
     },
-    txDescription: { fontSize: 16, fontWeight: '500' },
-    txCategory: { fontSize: 12, color: '#7f8c8d' },
-    txAmount: { fontSize: 16, fontWeight: 'bold', color: '#e74c3c' },
+    txDescription: {
+      fontSize: 16,
+      color: '#2c3e50',
+    },
+    txCategory: {
+      fontSize: 12,
+      color: '#7f8c8d',
+      marginTop: 4,
+    },
+    txAmount: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: '#e74c3c',
+    },
     deleteButton: {
       position: 'absolute',
       right: 0,
       top: 0,
       bottom: 0,
-      width: 80,
+      width: 100,
       backgroundColor: '#e74c3c',
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: 8,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    loadingText: {
+      marginTop: 10,
+      fontSize: 16,
+      color: '#7f8c8d',
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    errorText: {
+      marginTop: 10,
+      fontSize: 16,
+      color: '#e74c3c',
+      textAlign: 'center',
+    },
+    retryButton: {
+      marginTop: 20,
+      backgroundColor: '#3498db',
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 5,
+    },
+    retryButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
     },
 });

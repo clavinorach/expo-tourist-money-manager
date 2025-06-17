@@ -16,6 +16,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="map"
+        options={{
+          title: 'Map',
+          tabBarIcon: ({ color }) => <Ionicons size={28} name="map" color={color} />,
+          headerTitleAlign: 'center',
+        }}
+      />
+      <Tabs.Screen
         name="assistant"
         options={{
           title: 'AI Assistant',
@@ -23,12 +31,12 @@ export default function TabLayout() {
           headerTitleAlign: 'center',
         }}
       />
-       <Tabs.Screen
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
           tabBarIcon: ({ color }) => <Ionicons size={28} name="settings" color={color} />,
-           headerTitleAlign: 'center',
+          headerTitleAlign: 'center',
         }}
       />
     </Tabs>
